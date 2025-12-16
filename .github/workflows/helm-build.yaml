@@ -1,0 +1,89 @@
+name: Build and Push Helm Chart to ACR
+
+on:
+  push:
+    branches:
+      - 'main'
+    paths:
+      - 'helm/**'
+      - '.github/workflows/helm-build.yaml'
+  workflow_dispatch:
+    inputs:
+      chart_version:
+        description: 'Override Helm chart version (optional)'
+        required: false
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-push-helm:
+    name: 'Build and Push Helm Chart'
+    runs-on: self-hosted
+    env:
+      ACR_NAME: crsvvsagamgmtprodswec001
+      CHART_PATH: helm
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Verify Azure Login
+        run: |
+          az account show
+          az acr list --query "[].{name:name,loginServer:loginServer}" -o table
+
+      - name: Install Helm
+        run: |
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          helm version
+
+      - name: Package and Push Helm Chart
+        run: |
+          cd ${{ env.CHART_PATH }}
+
+          # Extract chart name and version from Chart.yaml
+          CHART_NAME=$(grep '^name:' Chart.yaml | awk '{print $2}')
+          CHART_VERSION="${{ inputs.chart_version }}"
+
+          # If no version override provided, use version from Chart.yaml
+          if [ -z "$CHART_VERSION" ]; then
+            CHART_VERSION=$(grep '^version:' Chart.yaml | awk '{print $2}')
+          fi
+
+          echo "Packaging Helm chart: $CHART_NAME version $CHART_VERSION"
+
+          # Update Chart.yaml with the version if overridden
+          if [ -n "${{ inputs.chart_version }}" ]; then
+            sed -i "s/^version:.*/version: $CHART_VERSION/" Chart.yaml
+          fi
+
+          # Package the Helm chart
+          helm package .
+
+          # Get ACR refresh token and login to Helm registry
+          ACR_TOKEN=$(az acr login -n ${{ env.ACR_NAME }} --expose-token --output tsv --query refreshToken)
+          echo "$ACR_TOKEN" | helm registry login ${{ env.ACR_NAME }}.azurecr.io --username 00000000-0000-0000-0000-000000000000 --password-stdin
+
+          # Push the Helm chart to ACR
+          helm push ${CHART_NAME}-${CHART_VERSION}.tgz oci://${{ env.ACR_NAME }}.azurecr.io/helm
+
+          echo "Successfully pushed ${CHART_NAME}:${CHART_VERSION} to ACR"
+
+      - name: Logout from Azure
+        if: always()
+        run: |
+          az logout || true
