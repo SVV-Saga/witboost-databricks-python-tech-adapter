@@ -21,7 +21,7 @@ permissions:
 jobs:
   build-and-push-helm:
     name: 'Build and Push Helm Chart'
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     env:
       ACR_NAME: crsvvsagamgmtprodswec001
       CHART_PATH: helm
