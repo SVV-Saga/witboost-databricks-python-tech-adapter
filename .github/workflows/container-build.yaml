@@ -1,0 +1,77 @@
+name: Build and Push Container Image to ACR
+
+on:
+  push:
+    branches:
+      - 'main'
+    paths:
+      - 'tech-adapter/Dockerfile'
+      - 'tech-adapter/**'
+      - '.github/workflows/container-build.yaml'
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Override image tag (optional, defaults to git SHA)'
+        required: false
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-push-container:
+    name: 'Build and Push Container Image'
+    runs-on: ubuntu-latest
+    env:
+      ACR_NAME: crsvvsagamgmtprodswec001
+      IMAGE_NAME: python-databricks-tech-adapter
+      DOCKERFILE_PATH: tech-adapter
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Verify Azure Login
+        run: |
+          az account show
+          az acr list --query "[].{name:name,loginServer:loginServer}" -o table
+
+      - name: Determine Image Tag
+        id: tag
+        run: |
+          if [ -n "${{ inputs.image_tag }}" ]; then
+            IMAGE_TAG="${{ inputs.image_tag }}"
+          else
+            IMAGE_TAG="${GITHUB_SHA::7}"
+          fi
+          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "Using image tag: $IMAGE_TAG"
+
+      - name: Build and Push Container Image
+        run: |
+          az acr login -n $ACR_NAME --expose-token
+
+          az acr build --registry $ACR_NAME \
+            --image $IMAGE_NAME:${{ steps.tag.outputs.image_tag }} \
+            --image $IMAGE_NAME:latest \
+            --file ./$DOCKERFILE_PATH/Dockerfile \
+            ./$DOCKERFILE_PATH
+
+          echo "Successfully pushed $IMAGE_NAME:${{ steps.tag.outputs.image_tag }} and $IMAGE_NAME:latest to ACR"
+
+      - name: Logout from Azure
+        if: always()
+        run: |
+          az logout || true
