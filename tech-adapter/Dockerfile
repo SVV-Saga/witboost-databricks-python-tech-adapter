@@ -40,6 +40,9 @@ COPY server_start.sh .
 WORKDIR /app/src
 COPY src/. .
 
+WORKDIR /app/config
+COPY config/. .
+
 WORKDIR /app
 
 ENV PYTHONPATH=${PYTHONPATH}:${PWD}
