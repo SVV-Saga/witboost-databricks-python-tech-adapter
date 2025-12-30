@@ -27,7 +27,9 @@ usecasetemplateid:
     job: ["urn:dmb:utm:databricks-workload-job-template"]
     dlt: ["urn:dmb:utm:databricks-workload-dlt-template"]
     workflow: ["urn:dmb:utm:databricks-workload-workflow-template"]
-  outputport: ["urn:dmb:utm:databricks-outputport-template"]
+  outputport:
+    - "urn:dmb:utm:databricks-outputport-template"
+    - "urn:dmb:utm:databricks-outputport-datacontract-template:1.0.0"
 
 misc:
   developmentEnvironmentName: development
