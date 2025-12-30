@@ -3,7 +3,7 @@ name: Build and Push Container Image to ACR
 on:
   push:
     branches:
-      - 'main'
+      - 'master'
     paths:
       - 'tech-adapter/Dockerfile'
       - 'tech-adapter/**'

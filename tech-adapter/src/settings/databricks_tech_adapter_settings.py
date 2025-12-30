@@ -182,7 +182,10 @@ class UseCaseTemplateIdSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="usecasetemplateid_", extra="ignore")
 
     workload: UseCaseTemplateWorkloadSettings
-    outputPort: List[str] = ["urn:dmb:utm:databricks-outputport-template"]
+    outputPort: List[str] = Field(
+        default=["urn:dmb:utm:databricks-outputport-template"],
+        alias="outputport"
+    )
 
 
 class MiscSettings(BaseSettings):
