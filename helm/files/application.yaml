@@ -29,7 +29,7 @@ usecasetemplateid:
     workflow: ["urn:dmb:utm:databricks-workload-workflow-template"]
   outputport:
     - "urn:dmb:utm:databricks-outputport-template"
-    - "urn:dmb:utm:databricks-outputport-datacontract-template:1.0.0"
+    - "urn:dmb:utm:databricks-outputport-datacontract-template"
 
 misc:
   developmentEnvironmentName: development
