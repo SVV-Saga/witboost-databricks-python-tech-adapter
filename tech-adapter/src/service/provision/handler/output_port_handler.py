@@ -71,7 +71,7 @@ class OutputPortHandler:
             statement_execution_manager = StatementExecutionManager()
             statement_id = statement_execution_manager.execute_statement_create_or_replace_view(
                 specific=specific,
-                schema=component.dataContract.schema_ or [],
+                schema=component.dataContract.get_flat_columns(),
                 sql_warehouse_id=sql_warehouse_id,
                 workspace_client=workspace_client,
             )

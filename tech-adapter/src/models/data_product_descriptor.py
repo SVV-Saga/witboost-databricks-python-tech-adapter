@@ -72,6 +72,7 @@ class OpenMetadataColumn(BaseModel):
     scale: Optional[int] = None
     description: Optional[str] = None
     tags: Optional[List[OpenMetadataTagLabel]] = None
+    properties: Optional[List["OpenMetadataColumn"]] = None  # Support nested structure for STRUCT types
 
     @field_validator("dataType")
     @classmethod
@@ -89,6 +90,29 @@ class OpenMetadataColumn(BaseModel):
 
 class DataContract(BaseModel):
     schema_: Optional[List[OpenMetadataColumn]] = Field(default=None, alias="schema")
+
+    def get_flat_columns(self) -> List[OpenMetadataColumn]:
+        """
+        Extracts actual columns from the schema, flattening any nested STRUCT containers.
+
+        Returns a list of only the actual data columns, excluding table-level metadata objects.
+        If a schema item has dataType=STRUCT and contains properties, returns those properties.
+        Otherwise returns the item itself (unless it's a STRUCT without properties).
+        """
+        if not self.schema_:
+            return []
+
+        flat_columns = []
+        for item in self.schema_:
+            if item.dataType.upper() == "STRUCT" and item.properties:
+                # This is a table container with nested columns
+                flat_columns.extend(item.properties)
+            elif item.dataType.upper() != "STRUCT":
+                # This is an actual column (not a container)
+                flat_columns.append(item)
+            # Skip STRUCT items without properties (empty containers)
+
+        return flat_columns
 
 
 class DataSharingAgreement(BaseModel):

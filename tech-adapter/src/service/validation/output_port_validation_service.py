@@ -180,14 +180,11 @@ class OutputPortValidation:
         """
         Verifies that every column in the proposed view schema exists in the source table.
         """
-        view_columns: list[OpenMetadataColumn] = component.dataContract.schema_ or []
+        view_columns: list[OpenMetadataColumn] = component.dataContract.get_flat_columns()
         table_columns_set = set(table_column_names)
 
         errors: list[str] = []
         for view_column in view_columns:
-            # Skip table-level metadata objects (dataType: STRUCT indicates a container, not a column)
-            if view_column.dataType.upper() == "STRUCT":
-                continue
             if view_column.name not in table_columns_set:
                 error_msg = (
                     f"Check for Output Port {component.name}: the column '{view_column.name}' "
