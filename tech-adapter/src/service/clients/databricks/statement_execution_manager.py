@@ -28,6 +28,9 @@ class StatementExecutionManager:
         # Add column comments
         if component.dataContract.schema_:
             for col in component.dataContract.schema_:
+                # Skip table-level metadata objects (dataType: STRUCT indicates a container, not a column)
+                if col.dataType.upper() == "STRUCT":
+                    continue
                 statement_id = self._execute_statement_comment_on_column(
                     component.specific, col, sql_warehouse_id, workspace_client
                 )
@@ -45,7 +48,11 @@ class StatementExecutionManager:
         """Creates a comma-separated list of columns, or '*' if empty."""
         if not schema:
             return "*"
-        return ",".join(f"`{c.name}`" for c in schema)
+        # Filter out table-level metadata objects (dataType: STRUCT indicates a container, not a column)
+        actual_columns = [c for c in schema if c.dataType.upper() != "STRUCT"]
+        if not actual_columns:
+            return "*"
+        return ",".join(f"`{c.name}`" for c in actual_columns)
 
     def _execute_query(self, query: str, catalog: str, schema: str, warehouse_id: str, client: WorkspaceClient) -> str:
         """Executes a SQL query and returns the statement ID."""
