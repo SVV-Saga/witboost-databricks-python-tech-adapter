@@ -612,3 +612,105 @@ def list_warehouses_picker(
             status_code=500,
             content={"error": str(e)}
         )
+
+
+@app.post(
+    "/custom-url-picker/v1/catalogs/validate",
+    response_model=PickerValidationResponse,
+    responses={
+        "200": {"model": PickerValidationResponse},
+        "500": {"model": SystemErr},
+    },
+    tags=["CustomUrlPicker"],
+)
+def validate_catalog_table_picker(
+    body: PickerValidationRequest = Body(...),
+) -> JSONResponse:
+    """
+    Validate that catalog, schema, and table exist in Unity Catalog.
+
+    Args:
+        body: Request body containing queryParameters with workspace_url, catalog_name, schema_name, and table_name
+
+    Returns:
+        PickerValidationResponse indicating whether the resources exist
+    """
+    try:
+        logger.info("Validating catalog resources: {}", body)
+
+        query_params = body.queryParameters or {}
+        workspace_url = query_params.get("workspace_url")
+        catalog_name = query_params.get("catalog_name")
+        schema_name = query_params.get("schema_name")
+        table_name = query_params.get("table_name")
+
+        errors = []
+
+        # Validate required parameters
+        if not workspace_url:
+            errors.append("workspace_url is required in queryParameters")
+        if not catalog_name:
+            errors.append("catalog_name is required in queryParameters")
+        if not schema_name:
+            errors.append("schema_name is required in queryParameters")
+        if not table_name:
+            errors.append("table_name is required in queryParameters")
+
+        if errors:
+            logger.warning("Missing required parameters for validation")
+            return JSONResponse(
+                status_code=200,
+                content={"valid": False, "errors": errors}
+            )
+
+        # Create Unity Catalog manager
+        uc_manager = _get_unity_catalog_manager(workspace_url)
+
+        # Validate catalog exists
+        logger.info("Checking if catalog '{}' exists", catalog_name)
+        catalog_exists = uc_manager.check_catalog_existence(catalog_name)
+        if not catalog_exists:
+            errors.append(f"Catalog '{catalog_name}' does not exist")
+            logger.warning("Catalog '{}' not found", catalog_name)
+            return JSONResponse(
+                status_code=200,
+                content={"valid": False, "errors": errors}
+            )
+
+        # Validate schema exists
+        logger.info("Checking if schema '{}.{}' exists", catalog_name, schema_name)
+        schema_exists = uc_manager.check_schema_existence(catalog_name, schema_name)
+        if not schema_exists:
+            errors.append(f"Schema '{catalog_name}.{schema_name}' does not exist")
+            logger.warning("Schema '{}.{}' not found", catalog_name, schema_name)
+            return JSONResponse(
+                status_code=200,
+                content={"valid": False, "errors": errors}
+            )
+
+        # Validate table exists
+        logger.info("Checking if table '{}.{}.{}' exists", catalog_name, schema_name, table_name)
+        table_exists = uc_manager.check_table_existence(catalog_name, schema_name, table_name)
+        if not table_exists:
+            errors.append(f"Table '{catalog_name}.{schema_name}.{table_name}' does not exist")
+            logger.warning("Table '{}.{}.{}' not found", catalog_name, schema_name, table_name)
+            return JSONResponse(
+                status_code=200,
+                content={"valid": False, "errors": errors}
+            )
+
+        # All validations passed
+        logger.info("Validation successful: catalog, schema, and table exist")
+        return JSONResponse(
+            status_code=200,
+            content={"valid": True, "errors": None}
+        )
+
+    except Exception as e:
+        logger.error("Error during validation: {}", e)
+        import traceback
+        logger.error("Traceback: {}", traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
