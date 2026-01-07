@@ -292,6 +292,8 @@ def get_reverse_provisioning_status(
 def _get_unity_catalog_manager(workspace_url: str) -> UnityCatalogManager:
     """Helper function to create Unity Catalog manager for a workspace."""
     from databricks.sdk import WorkspaceClient
+    from azure.mgmt.databricks.models import ProvisioningState
+    import re
 
     # Create workspace client with Azure authentication
     workspace_client = WorkspaceClient(
@@ -301,10 +303,20 @@ def _get_unity_catalog_manager(workspace_url: str) -> UnityCatalogManager:
         azure_client_id=settings.azure.auth.client_id,
         azure_client_secret=settings.azure.auth.client_secret,
     )
-    workspace_info = DatabricksWorkspaceInfo(
-        id="",  # Not needed for listing operations
-        name=workspace_url,
-        workspace_url=workspace_url,
+
+    # Extract workspace ID from URL (format: https://adb-<workspace-id>.<region>.azuredatabricks.net)
+    # For listing operations, use "0" as placeholder if extraction fails
+    workspace_id = "0"
+    match = re.search(r"adb-(\d+)", workspace_url)
+    if match:
+        workspace_id = match.group(1)
+
+    # Create unmanaged workspace info for listing operations
+    workspace_info = DatabricksWorkspaceInfo.build_unmanaged(
+        databricks_host=workspace_url,
+        id=workspace_id,
+        azure_resource_url=workspace_url,
+        provisioning_state=ProvisioningState.SUCCEEDED,
     )
     return UnityCatalogManager(workspace_client, workspace_info)
 
