@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import uuid
+from typing import Dict, List, Optional
 
-from fastapi import Request
+from fastapi import Body, Query, Request
+from fastapi.responses import JSONResponse
 from loguru import logger
 from starlette.background import BackgroundTask
 from starlette.responses import Response
@@ -311,29 +313,40 @@ def _get_workspace_manager(workspace_url: str) -> WorkspaceManager:
 
 @app.post(
     "/custom-url-picker/v1/catalogs",
-    response_model=None,
+    response_model=List[PickerOption],
     responses={
-        "200": {"model": list[PickerOption]},
+        "200": {"model": List[PickerOption]},
         "500": {"model": SystemErr},
     },
     tags=["CustomUrlPicker"],
 )
 def list_catalogs_picker(
-    workspace_url: str,
-    filter: str = "",
-    offset: int = 0,
-    limit: int = 50,
-) -> Response:
+    filter: str = Query("", description="Optional filter text for catalog names"),
+    offset: int = Query(0, description="Pagination offset"),
+    limit: int = Query(50, description="Maximum number of results"),
+    body: Dict = Body(default={}),
+) -> JSONResponse:
     """
     List available Unity Catalog catalogs for Custom URL Picker dropdown.
 
     Args:
-        workspace_url: Databricks workspace URL
         filter: Optional filter text for catalog names
         offset: Pagination offset
         limit: Maximum number of results
+        body: Request body containing queryParameters like workspace_url
     """
     try:
+        # Extract workspace_url from body or queryParameters
+        query_params = body.get("queryParameters", {}) if body else {}
+        workspace_url = query_params.get("workspace_url")
+
+        if not workspace_url:
+            logger.error("Missing workspace_url in request")
+            return JSONResponse(
+                status_code=400,
+                content={"error": "workspace_url is required in queryParameters"}
+            )
+
         uc_manager = _get_unity_catalog_manager(workspace_url)
         catalog_names = uc_manager.list_catalogs(filter_text=filter if filter else None)
 
@@ -341,47 +354,60 @@ def list_catalogs_picker(
         paginated = catalog_names[offset : offset + limit]
 
         options = [
-            PickerOption(
-                id=name,
-                value=name,
-                description=f"Unity Catalog: {name}",
-            )
+            {
+                "id": name,
+                "value": name,
+                "description": f"Unity Catalog: {name}",
+            }
             for name in paginated
         ]
 
-        return check_response(out_response=options)
+        return JSONResponse(content=options)
     except Exception as e:
         logger.error("Error listing catalogs: {}", e)
-        return check_response(out_response=SystemErr(error=str(e)))
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
 
 
 @app.post(
     "/custom-url-picker/v1/schemas",
-    response_model=None,
+    response_model=List[PickerOption],
     responses={
-        "200": {"model": list[PickerOption]},
+        "200": {"model": List[PickerOption]},
         "500": {"model": SystemErr},
     },
     tags=["CustomUrlPicker"],
 )
 def list_schemas_picker(
-    workspace_url: str,
-    catalog_name: str,
-    filter: str = "",
-    offset: int = 0,
-    limit: int = 50,
-) -> Response:
+    filter: str = Query("", description="Optional filter text for schema names"),
+    offset: int = Query(0, description="Pagination offset"),
+    limit: int = Query(50, description="Maximum number of results"),
+    body: Dict = Body(default={}),
+) -> JSONResponse:
     """
     List available schemas in a catalog for Custom URL Picker dropdown.
 
     Args:
-        workspace_url: Databricks workspace URL
-        catalog_name: Parent catalog name
         filter: Optional filter text for schema names
         offset: Pagination offset
         limit: Maximum number of results
+        body: Request body containing queryParameters like workspace_url and catalog_name
     """
     try:
+        # Extract parameters from body
+        query_params = body.get("queryParameters", {}) if body else {}
+        workspace_url = query_params.get("workspace_url")
+        catalog_name = query_params.get("catalog_name")
+
+        if not workspace_url or not catalog_name:
+            logger.error("Missing required parameters: workspace_url={}, catalog_name={}", workspace_url, catalog_name)
+            return JSONResponse(
+                status_code=400,
+                content={"error": "workspace_url and catalog_name are required in queryParameters"}
+            )
+
         uc_manager = _get_unity_catalog_manager(workspace_url)
         schema_names = uc_manager.list_schemas(
             catalog_name=catalog_name, filter_text=filter if filter else None
@@ -391,49 +417,64 @@ def list_schemas_picker(
         paginated = schema_names[offset : offset + limit]
 
         options = [
-            PickerOption(
-                id=name,
-                value=name,
-                description=f"Schema in {catalog_name}: {name}",
-            )
+            {
+                "id": name,
+                "value": name,
+                "description": f"Schema in {catalog_name}: {name}",
+            }
             for name in paginated
         ]
 
-        return check_response(out_response=options)
+        return JSONResponse(content=options)
     except Exception as e:
         logger.error("Error listing schemas: {}", e)
-        return check_response(out_response=SystemErr(error=str(e)))
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
 
 
 @app.post(
     "/custom-url-picker/v1/tables",
-    response_model=None,
+    response_model=List[PickerOption],
     responses={
-        "200": {"model": list[PickerOption]},
+        "200": {"model": List[PickerOption]},
         "500": {"model": SystemErr},
     },
     tags=["CustomUrlPicker"],
 )
 def list_tables_picker(
-    workspace_url: str,
-    catalog_name: str,
-    schema_name: str,
-    filter: str = "",
-    offset: int = 0,
-    limit: int = 50,
-) -> Response:
+    filter: str = Query("", description="Optional filter text for table names"),
+    offset: int = Query(0, description="Pagination offset"),
+    limit: int = Query(50, description="Maximum number of results"),
+    body: Dict = Body(default={}),
+) -> JSONResponse:
     """
     List available tables in a schema for Custom URL Picker dropdown.
 
     Args:
-        workspace_url: Databricks workspace URL
-        catalog_name: Parent catalog name
-        schema_name: Parent schema name
         filter: Optional filter text for table names
         offset: Pagination offset
         limit: Maximum number of results
+        body: Request body containing queryParameters like workspace_url, catalog_name, and schema_name
     """
     try:
+        # Extract parameters from body
+        query_params = body.get("queryParameters", {}) if body else {}
+        workspace_url = query_params.get("workspace_url")
+        catalog_name = query_params.get("catalog_name")
+        schema_name = query_params.get("schema_name")
+
+        if not workspace_url or not catalog_name or not schema_name:
+            logger.error(
+                "Missing required parameters: workspace_url={}, catalog_name={}, schema_name={}",
+                workspace_url, catalog_name, schema_name
+            )
+            return JSONResponse(
+                status_code=400,
+                content={"error": "workspace_url, catalog_name, and schema_name are required in queryParameters"}
+            )
+
         uc_manager = _get_unity_catalog_manager(workspace_url)
         table_names = uc_manager.list_tables(
             catalog_name=catalog_name,
@@ -445,45 +486,59 @@ def list_tables_picker(
         paginated = table_names[offset : offset + limit]
 
         options = [
-            PickerOption(
-                id=name,
-                value=name,
-                description=f"Table in {catalog_name}.{schema_name}: {name}",
-            )
+            {
+                "id": name,
+                "value": name,
+                "description": f"Table in {catalog_name}.{schema_name}: {name}",
+            }
             for name in paginated
         ]
 
-        return check_response(out_response=options)
+        return JSONResponse(content=options)
     except Exception as e:
         logger.error("Error listing tables: {}", e)
-        return check_response(out_response=SystemErr(error=str(e)))
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
 
 
 @app.post(
     "/custom-url-picker/v1/warehouses",
-    response_model=None,
+    response_model=List[PickerOption],
     responses={
-        "200": {"model": list[PickerOption]},
+        "200": {"model": List[PickerOption]},
         "500": {"model": SystemErr},
     },
     tags=["CustomUrlPicker"],
 )
 def list_warehouses_picker(
-    workspace_url: str,
-    filter: str = "",
-    offset: int = 0,
-    limit: int = 50,
-) -> Response:
+    filter: str = Query("", description="Optional filter text for warehouse names"),
+    offset: int = Query(0, description="Pagination offset"),
+    limit: int = Query(50, description="Maximum number of results"),
+    body: Dict = Body(default={}),
+) -> JSONResponse:
     """
     List available SQL warehouses for Custom URL Picker dropdown.
 
     Args:
-        workspace_url: Databricks workspace URL
         filter: Optional filter text for warehouse names
         offset: Pagination offset
         limit: Maximum number of results
+        body: Request body containing queryParameters like workspace_url
     """
     try:
+        # Extract parameters from body
+        query_params = body.get("queryParameters", {}) if body else {}
+        workspace_url = query_params.get("workspace_url")
+
+        if not workspace_url:
+            logger.error("Missing workspace_url in request")
+            return JSONResponse(
+                status_code=400,
+                content={"error": "workspace_url is required in queryParameters"}
+            )
+
         ws_manager = _get_workspace_manager(workspace_url)
         warehouses = ws_manager.list_warehouses()
 
@@ -500,15 +555,18 @@ def list_warehouses_picker(
         paginated = warehouse_names[offset : offset + limit]
 
         options = [
-            PickerOption(
-                id=name,
-                value=name,
-                description=f"SQL Warehouse: {name}",
-            )
+            {
+                "id": name,
+                "value": name,
+                "description": f"SQL Warehouse: {name}",
+            }
             for name in paginated
         ]
 
-        return check_response(out_response=options)
+        return JSONResponse(content=options)
     except Exception as e:
         logger.error("Error listing warehouses: {}", e)
-        return check_response(out_response=SystemErr(error=str(e)))
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
