@@ -293,7 +293,14 @@ def _get_unity_catalog_manager(workspace_url: str) -> UnityCatalogManager:
     """Helper function to create Unity Catalog manager for a workspace."""
     from databricks.sdk import WorkspaceClient
 
-    workspace_client = WorkspaceClient(host=workspace_url)
+    # Create workspace client with Azure authentication
+    workspace_client = WorkspaceClient(
+        auth_type="azure-client-secret",
+        host=workspace_url,
+        azure_tenant_id=settings.azure.auth.tenant_id,
+        azure_client_id=settings.azure.auth.client_id,
+        azure_client_secret=settings.azure.auth.client_secret,
+    )
     workspace_info = DatabricksWorkspaceInfo(
         id="",  # Not needed for listing operations
         name=workspace_url,
@@ -306,7 +313,14 @@ def _get_workspace_manager(workspace_url: str) -> WorkspaceManager:
     """Helper function to create Workspace manager for a workspace."""
     from databricks.sdk import WorkspaceClient
 
-    workspace_client = WorkspaceClient(host=workspace_url)
+    # Create workspace client with Azure authentication
+    workspace_client = WorkspaceClient(
+        auth_type="azure-client-secret",
+        host=workspace_url,
+        azure_tenant_id=settings.azure.auth.tenant_id,
+        azure_client_id=settings.azure.auth.client_id,
+        azure_client_secret=settings.azure.auth.client_secret,
+    )
     account_client = get_account_client(settings)
     return WorkspaceManager(workspace_client, account_client)
 
@@ -336,9 +350,14 @@ def list_catalogs_picker(
         body: Request body containing queryParameters like workspace_url
     """
     try:
+        # Debug logging
+        logger.info("Received request - filter: {}, offset: {}, limit: {}, body: {}", filter, offset, limit, body)
+
         # Extract workspace_url from body or queryParameters
         query_params = body.get("queryParameters", {}) if body else {}
         workspace_url = query_params.get("workspace_url")
+
+        logger.info("Extracted workspace_url: {}", workspace_url)
 
         if not workspace_url:
             logger.error("Missing workspace_url in request")
@@ -349,6 +368,8 @@ def list_catalogs_picker(
 
         uc_manager = _get_unity_catalog_manager(workspace_url)
         catalog_names = uc_manager.list_catalogs(filter_text=filter if filter else None)
+
+        logger.info("Found {} catalogs", len(catalog_names))
 
         # Apply pagination
         paginated = catalog_names[offset : offset + limit]
@@ -362,9 +383,18 @@ def list_catalogs_picker(
             for name in paginated
         ]
 
-        return JSONResponse(content=options)
+        logger.info("Returning {} options: {}", len(options), options)
+
+        # Return as JSON array directly
+        return JSONResponse(
+            status_code=200,
+            content=options,
+            headers={"Content-Type": "application/json"}
+        )
     except Exception as e:
         logger.error("Error listing catalogs: {}", e)
+        import traceback
+        logger.error("Traceback: {}", traceback.format_exc())
         return JSONResponse(
             status_code=500,
             content={"error": str(e)}
