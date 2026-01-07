@@ -408,8 +408,8 @@ def list_catalogs_picker(
         import traceback
         logger.error("Traceback: {}", traceback.format_exc())
         return JSONResponse(
-            status_code=500,
-            content={"error": str(e)}
+            status_code=200,
+            content=[]
         )
 
 
@@ -470,9 +470,11 @@ def list_schemas_picker(
         return JSONResponse(content=options)
     except Exception as e:
         logger.error("Error listing schemas: {}", e)
+        import traceback
+        logger.error("Traceback: {}", traceback.format_exc())
         return JSONResponse(
-            status_code=500,
-            content={"error": str(e)}
+            status_code=200,
+            content=[]
         )
 
 
@@ -539,9 +541,11 @@ def list_tables_picker(
         return JSONResponse(content=options)
     except Exception as e:
         logger.error("Error listing tables: {}", e)
+        import traceback
+        logger.error("Traceback: {}", traceback.format_exc())
         return JSONResponse(
-            status_code=500,
-            content={"error": str(e)}
+            status_code=200,
+            content=[]
         )
 
 
@@ -608,9 +612,11 @@ def list_warehouses_picker(
         return JSONResponse(content=options)
     except Exception as e:
         logger.error("Error listing warehouses: {}", e)
+        import traceback
+        logger.error("Traceback: {}", traceback.format_exc())
         return JSONResponse(
-            status_code=500,
-            content={"error": str(e)}
+            status_code=200,
+            content=[]
         )
 
 
