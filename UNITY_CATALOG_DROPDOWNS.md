@@ -77,6 +77,18 @@ All endpoints use Azure Client Secret authentication configured in the tech adap
 - `azure_client_id`
 - `azure_client_secret`
 
+## CORS Configuration
+The tech adapter includes CORS middleware to allow the Witboost UI (running on a different origin) to call the Custom URL Picker API endpoints. This is configured in `src/app_config.py`:
+```python
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, restrict to Witboost UI origin
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
+
 ## Deployment Instructions
 
 ### 1. Build Docker Image
@@ -181,8 +193,12 @@ All dropdowns support search functionality to filter results
 **Solution**: Ensure helper functions use `auth_type="azure-client-secret"`
 
 ### Error: "ae.map is not a function" in UI
-**Cause**: API returning wrong format (not an array)
-**Solution**: Ensure endpoints return `JSONResponse(content=options)` where options is a list
+**Cause**: CORS blocking requests from Witboost UI, or API returning wrong format
+**Solution**:
+1. **Most common**: Add CORS middleware to FastAPI app (see CORS Configuration section)
+2. Check browser DevTools Network tab to see if requests are blocked by CORS policy
+3. Verify endpoints return `JSONResponse(content=options)` where options is a list
+4. Ensure `techadapterUrl` variable is configured in Witboost settings
 
 ### Error: Validation errors for DatabricksWorkspaceInfo
 **Cause**: Using constructor instead of factory method
