@@ -1,6 +1,6 @@
 import threading
 from functools import lru_cache
-from typing import Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 from databricks.sdk import AccountClient, WorkspaceClient
 from databricks.sdk.service.iam import ServicePrincipal
@@ -76,6 +76,25 @@ class WorkspaceManager:
             error_msg = f"SQL Warehouse '{sql_warehouse_name}' not found in workspace '{self.get_workspace_name()}'"
             logger.error(error_msg)
             raise DatabricksWorkspaceManagerError(error_msg)
+        except Exception as e:
+            logger.error("Failed to list SQL warehouses")
+            raise DatabricksWorkspaceManagerError(f"Failed to list SQL warehouses: {e}") from e
+
+    def list_warehouses(self) -> List[Any]:
+        """
+        Lists all SQL warehouses in the workspace.
+
+        Returns:
+            A list of warehouse objects with name, id, and other warehouse details.
+
+        Raises:
+            WorkspaceManagerError: If listing warehouses fails.
+        """
+        try:
+            logger.info("Listing SQL warehouses in workspace")
+            warehouses = list(self.workspace_client.warehouses.list())
+            logger.info("Found {} SQL warehouses", len(warehouses))
+            return warehouses
         except Exception as e:
             logger.error("Failed to list SQL warehouses")
             raise DatabricksWorkspaceManagerError(f"Failed to list SQL warehouses: {e}") from e

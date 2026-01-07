@@ -13,6 +13,8 @@ from src.dependencies import (
     ProvisionServiceDep,
     ReverseProvisionServiceDep,
     UpdateAclServiceDep,
+    get_account_client,
+    settings,
 )
 from src.models.api_models import (
     ProvisioningStatus,
@@ -25,6 +27,15 @@ from src.models.api_models import (
     ValidationResult,
     ValidationStatus,
 )
+from src.models.custom_url_picker_models import (
+    PickerOption,
+    PickerResourcesRequest,
+    PickerValidationRequest,
+    PickerValidationResponse,
+)
+from src.models.databricks.databricks_workspace_info import DatabricksWorkspaceInfo
+from src.service.clients.databricks.unity_catalog_manager import UnityCatalogManager
+from src.service.clients.databricks.workspace_manager import WorkspaceManager
 from src.service.validation.validation_service import (
     ValidatedDatabricksComponentDep,
     ValidatedUpdateACLDatabricksComponentDep,
@@ -269,3 +280,235 @@ def get_reverse_provisioning_status(
     resp = SystemErr(error="Response not yet implemented")
 
     return check_response(out_response=resp)
+
+
+# ============================================================================
+# Custom URL Picker API Endpoints for Unity Catalog Resources
+# ============================================================================
+
+
+def _get_unity_catalog_manager(workspace_url: str) -> UnityCatalogManager:
+    """Helper function to create Unity Catalog manager for a workspace."""
+    from databricks.sdk import WorkspaceClient
+
+    workspace_client = WorkspaceClient(host=workspace_url)
+    workspace_info = DatabricksWorkspaceInfo(
+        id="",  # Not needed for listing operations
+        name=workspace_url,
+        workspace_url=workspace_url,
+    )
+    return UnityCatalogManager(workspace_client, workspace_info)
+
+
+def _get_workspace_manager(workspace_url: str) -> WorkspaceManager:
+    """Helper function to create Workspace manager for a workspace."""
+    from databricks.sdk import WorkspaceClient
+
+    workspace_client = WorkspaceClient(host=workspace_url)
+    account_client = get_account_client(settings)
+    return WorkspaceManager(workspace_client, account_client)
+
+
+@app.post(
+    "/custom-url-picker/v1/catalogs",
+    response_model=None,
+    responses={
+        "200": {"model": list[PickerOption]},
+        "500": {"model": SystemErr},
+    },
+    tags=["CustomUrlPicker"],
+)
+def list_catalogs_picker(
+    workspace_url: str,
+    filter: str = "",
+    offset: int = 0,
+    limit: int = 50,
+) -> Response:
+    """
+    List available Unity Catalog catalogs for Custom URL Picker dropdown.
+
+    Args:
+        workspace_url: Databricks workspace URL
+        filter: Optional filter text for catalog names
+        offset: Pagination offset
+        limit: Maximum number of results
+    """
+    try:
+        uc_manager = _get_unity_catalog_manager(workspace_url)
+        catalog_names = uc_manager.list_catalogs(filter_text=filter if filter else None)
+
+        # Apply pagination
+        paginated = catalog_names[offset : offset + limit]
+
+        options = [
+            PickerOption(
+                id=name,
+                value=name,
+                description=f"Unity Catalog: {name}",
+            )
+            for name in paginated
+        ]
+
+        return check_response(out_response=options)
+    except Exception as e:
+        logger.error("Error listing catalogs: {}", e)
+        return check_response(out_response=SystemErr(error=str(e)))
+
+
+@app.post(
+    "/custom-url-picker/v1/schemas",
+    response_model=None,
+    responses={
+        "200": {"model": list[PickerOption]},
+        "500": {"model": SystemErr},
+    },
+    tags=["CustomUrlPicker"],
+)
+def list_schemas_picker(
+    workspace_url: str,
+    catalog_name: str,
+    filter: str = "",
+    offset: int = 0,
+    limit: int = 50,
+) -> Response:
+    """
+    List available schemas in a catalog for Custom URL Picker dropdown.
+
+    Args:
+        workspace_url: Databricks workspace URL
+        catalog_name: Parent catalog name
+        filter: Optional filter text for schema names
+        offset: Pagination offset
+        limit: Maximum number of results
+    """
+    try:
+        uc_manager = _get_unity_catalog_manager(workspace_url)
+        schema_names = uc_manager.list_schemas(
+            catalog_name=catalog_name, filter_text=filter if filter else None
+        )
+
+        # Apply pagination
+        paginated = schema_names[offset : offset + limit]
+
+        options = [
+            PickerOption(
+                id=name,
+                value=name,
+                description=f"Schema in {catalog_name}: {name}",
+            )
+            for name in paginated
+        ]
+
+        return check_response(out_response=options)
+    except Exception as e:
+        logger.error("Error listing schemas: {}", e)
+        return check_response(out_response=SystemErr(error=str(e)))
+
+
+@app.post(
+    "/custom-url-picker/v1/tables",
+    response_model=None,
+    responses={
+        "200": {"model": list[PickerOption]},
+        "500": {"model": SystemErr},
+    },
+    tags=["CustomUrlPicker"],
+)
+def list_tables_picker(
+    workspace_url: str,
+    catalog_name: str,
+    schema_name: str,
+    filter: str = "",
+    offset: int = 0,
+    limit: int = 50,
+) -> Response:
+    """
+    List available tables in a schema for Custom URL Picker dropdown.
+
+    Args:
+        workspace_url: Databricks workspace URL
+        catalog_name: Parent catalog name
+        schema_name: Parent schema name
+        filter: Optional filter text for table names
+        offset: Pagination offset
+        limit: Maximum number of results
+    """
+    try:
+        uc_manager = _get_unity_catalog_manager(workspace_url)
+        table_names = uc_manager.list_tables(
+            catalog_name=catalog_name,
+            schema_name=schema_name,
+            filter_text=filter if filter else None,
+        )
+
+        # Apply pagination
+        paginated = table_names[offset : offset + limit]
+
+        options = [
+            PickerOption(
+                id=name,
+                value=name,
+                description=f"Table in {catalog_name}.{schema_name}: {name}",
+            )
+            for name in paginated
+        ]
+
+        return check_response(out_response=options)
+    except Exception as e:
+        logger.error("Error listing tables: {}", e)
+        return check_response(out_response=SystemErr(error=str(e)))
+
+
+@app.post(
+    "/custom-url-picker/v1/warehouses",
+    response_model=None,
+    responses={
+        "200": {"model": list[PickerOption]},
+        "500": {"model": SystemErr},
+    },
+    tags=["CustomUrlPicker"],
+)
+def list_warehouses_picker(
+    workspace_url: str,
+    filter: str = "",
+    offset: int = 0,
+    limit: int = 50,
+) -> Response:
+    """
+    List available SQL warehouses for Custom URL Picker dropdown.
+
+    Args:
+        workspace_url: Databricks workspace URL
+        filter: Optional filter text for warehouse names
+        offset: Pagination offset
+        limit: Maximum number of results
+    """
+    try:
+        ws_manager = _get_workspace_manager(workspace_url)
+        warehouses = ws_manager.list_warehouses()
+
+        warehouse_names = [wh.name for wh in warehouses if wh.name]
+
+        # Apply filter
+        if filter:
+            filter_lower = filter.lower()
+            warehouse_names = [name for name in warehouse_names if filter_lower in name.lower()]
+
+        warehouse_names = sorted(warehouse_names)
+
+        # Apply pagination
+        paginated = warehouse_names[offset : offset + limit]
+
+        options = [
+            PickerOption(
+                id=name,
+                value=name,
+                description=f"SQL Warehouse: {name}",
+            )
+            for name in paginated
+        ]
+
+        return check_response(out_response=options)
+    except Exception as e:
+        logger.error("Error listing warehouses: {}", e)
+        return check_response(out_response=SystemErr(error=str(e)))

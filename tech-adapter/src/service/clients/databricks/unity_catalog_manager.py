@@ -1,5 +1,5 @@
 import time
-from typing import Collection, List
+from typing import Collection, List, Optional
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import ResourceAlreadyExists
@@ -289,6 +289,115 @@ class UnityCatalogManager:
                 "An error occurred while retrieving current permission on '{}'. "
                 "Please try again and if the error persists contact the platform team. Details: {}",
                 full_name,
+                e,
+            )
+            raise UnityCatalogError(error_msg) from e
+
+    def list_catalogs(self, filter_text: Optional[str] = None) -> List[str]:
+        """
+        Lists all available catalogs in the Unity Catalog.
+
+        Args:
+            filter_text: Optional text to filter catalog names (case-insensitive).
+
+        Returns:
+            List of catalog names.
+
+        Raises:
+            UnityCatalogError: If listing catalogs fails.
+        """
+        try:
+            logger.info("Listing Unity Catalogs in workspace {}", self.workspace_info.name)
+            catalogs_list = list(self.workspace_client.catalogs.list())
+            catalog_names = [cat.name for cat in catalogs_list if cat.name]
+
+            if filter_text:
+                filter_lower = filter_text.lower()
+                catalog_names = [name for name in catalog_names if filter_lower in name.lower()]
+
+            return sorted(catalog_names)
+        except Exception as e:
+            error_msg = "An error occurred while listing Unity Catalogs"
+            logger.error("An error occurred while listing Unity Catalogs. Details: {}", e)
+            raise UnityCatalogError(error_msg) from e
+
+    def list_schemas(self, catalog_name: str, filter_text: Optional[str] = None) -> List[str]:
+        """
+        Lists all schemas within a specified catalog.
+
+        Args:
+            catalog_name: The name of the parent catalog.
+            filter_text: Optional text to filter schema names (case-insensitive).
+
+        Returns:
+            List of schema names.
+
+        Raises:
+            UnityCatalogError: If the catalog doesn't exist or listing schemas fails.
+        """
+        try:
+            if not self.check_catalog_existence(catalog_name):
+                error_msg = f"Cannot list schemas because catalog '{catalog_name}' does not exist."
+                logger.error(error_msg)
+                raise UnityCatalogError(error_msg)
+
+            logger.info("Listing schemas in catalog '{}'", catalog_name)
+            schemas_list = list(self.workspace_client.schemas.list(catalog_name=catalog_name))
+            schema_names = [schema.name for schema in schemas_list if schema.name]
+
+            if filter_text:
+                filter_lower = filter_text.lower()
+                schema_names = [name for name in schema_names if filter_lower in name.lower()]
+
+            return sorted(schema_names)
+        except UnityCatalogError:
+            raise
+        except Exception as e:
+            error_msg = f"An error occurred while listing schemas in catalog '{catalog_name}'"
+            logger.error("An error occurred while listing schemas in catalog '{}'. Details: {}", catalog_name, e)
+            raise UnityCatalogError(error_msg) from e
+
+    def list_tables(self, catalog_name: str, schema_name: str, filter_text: Optional[str] = None) -> List[str]:
+        """
+        Lists all tables within a specified schema.
+
+        Args:
+            catalog_name: The name of the parent catalog.
+            schema_name: The name of the parent schema.
+            filter_text: Optional text to filter table names (case-insensitive).
+
+        Returns:
+            List of table names.
+
+        Raises:
+            UnityCatalogError: If the catalog/schema doesn't exist or listing tables fails.
+        """
+        try:
+            if not self.check_schema_existence(catalog_name, schema_name):
+                error_msg = (
+                    f"Cannot list tables because schema '{schema_name}' "
+                    f"in catalog '{catalog_name}' does not exist."
+                )
+                logger.error(error_msg)
+                raise UnityCatalogError(error_msg)
+
+            logger.info("Listing tables in schema '{}.{}'", catalog_name, schema_name)
+            tables_list = list(self.workspace_client.tables.list(catalog_name=catalog_name, schema_name=schema_name))
+            table_names = [table.name for table in tables_list if table.name]
+
+            if filter_text:
+                filter_lower = filter_text.lower()
+                table_names = [name for name in table_names if filter_lower in name.lower()]
+
+            return sorted(table_names)
+        except UnityCatalogError:
+            raise
+        except Exception as e:
+            error_msg = f"An error occurred while listing tables in schema '{catalog_name}.{schema_name}'"
+            logger.error(
+                "An error occurred while listing tables in schema '{}.{}'. Details: {}",
+                catalog_name,
+                schema_name,
                 e,
             )
             raise UnityCatalogError(error_msg) from e
